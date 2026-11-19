@@ -1,0 +1,5 @@
+#!/bin/sh
+# superpipe's own tsx and tsconfig, wherever it's run from: tsx otherwise reads the caller's
+# tsconfig.json, whose `paths` can swap out superpipe's imports.
+root=$(dirname "$(dirname "$(realpath "$0")")")
+exec "$root/node_modules/.bin/tsx" --tsconfig "$root/tsconfig.json" "$root/src/cli.ts" "$@"

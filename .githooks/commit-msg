@@ -1,0 +1,7 @@
+#!/bin/sh
+# See pre-commit: nothing private/terms matches may reach this public repo.
+[ -f private/terms ] || exit 0
+if grep -v '^#' "$1" | grep -i -E -f private/terms >&2; then
+  echo 'private/terms matches this commit message.' >&2
+  exit 1
+fi

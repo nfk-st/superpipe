@@ -1,0 +1,8 @@
+#!/bin/sh
+# Enabled per clone with: git config core.hooksPath .githooks
+# private/ is the maintainer's gitignored notes. Nothing its terms match may reach this public repo.
+if [ -f private/terms ]; then
+  hits=$({ git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT; git diff --cached --no-renames -U0 --no-color | grep '^+'; } | grep -i -E -f private/terms)
+  [ -z "$hits" ] || { printf 'private/terms matches this commit:\n%s\n' "$hits" >&2; exit 1; }
+fi
+npm run -s typecheck && node test/cites.mjs --staged

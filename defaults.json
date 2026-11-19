@@ -1,0 +1,34 @@
+{
+  "stages": {
+    "spec": {
+      "author": { "agent": "claude", "model": "fable", "effort": "max" },
+      "reviewers": [{ "agent": "claude", "model": "opus", "effort": "max" }]
+    },
+    "tests": {
+      "author": { "agent": "claude", "model": "opus", "effort": "xhigh" },
+      "reviewers": [{ "agent": "claude", "model": "fable", "effort": "high" }]
+    },
+    "implement": {
+      "author": { "agent": "claude", "model": "sonnet", "effort": "xhigh" },
+      "timeoutSec": 5400
+    },
+    "review": {
+      "reviewers": [
+        { "agent": "claude", "model": "fable", "effort": "max" },
+        { "agent": "claude", "model": "opus", "effort": "max" }
+      ]
+    },
+    "ship": {
+      "author": { "agent": "claude", "model": "sonnet", "effort": "medium" },
+      "timeoutSec": 1200
+    }
+  },
+  "gates": {
+    "approveAfter": ["spec"],
+    "approveBefore": ["ship"],
+    "approveRevertTo": ["spec"]
+  },
+  "limits": { "maxAttemptsPerStage": 3, "maxTransitions": 25, "humanWaitSec": 14400, "stallSec": 240, "defaultTimeoutSec": 3600 },
+  "testsMustFailBeforeImplement": true,
+  "ship": { "push": true, "draftPr": true }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "superpipe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "superpipe": "./bin/superpipe" },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.2",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/picomatch": "^3.0.1",
+    "typescript": "^5.7.2"
+  },
+  "engines": { "node": ">=22" }
+}
