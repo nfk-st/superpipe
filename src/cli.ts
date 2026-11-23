@@ -126,8 +126,10 @@ function warnSameModel(cfg: Config) {
 async function openspecPreflight(repo: string, slug: string, baseBranch: string) {
   // OpenSpec's change-name grammar (change-utils.js), stricter than the driver's.
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(slug)) throw new Error('--slug must be an OpenSpec change name: a letter first, then lowercase letters and digits in dash-separated words');
-  const taken = (await g.git(repo, ['ls-tree', '--name-only', baseBranch, `openspec/specs/${slug}`, `openspec/changes/${slug}`])).trim();
-  if (taken) throw new Error(`${baseBranch} already has ${taken.split('\n').join(' and ')}. Pick another slug.`);
+  const has = async (path: string) => (await g.git(repo, ['ls-tree', '--name-only', baseBranch, path])).trim() !== '';
+  if (await has(`openspec/specs/${slug}`)) throw new Error(`${baseBranch} already has openspec/specs/${slug}. Pick another slug.`);
+  // A proposal merged ahead of its code is the spec stage's first draft.
+  if (await has(`openspec/changes/${slug}`)) console.log(`${baseBranch} already has openspec/changes/${slug}, so the spec stage starts from it.`);
   const v = await g.sh('openspec --version', repo);
   if (v.code !== 0) throw new Error(`The openspec preset needs the openspec CLI on PATH: ${v.output.trim()}`);
 }

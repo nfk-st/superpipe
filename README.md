@@ -191,7 +191,8 @@ superpipe profile import widget.json
   - After the spec author, the driver checks that `proposal.md` isn't empty and runs `openspec validate <slug> --type change --strict`. A failure discards the attempt, with the validate output as the reason.
   - Implement writes and ticks `tasks.md`, which the driver checks exists. It can't touch `openspec/specs/` or any other change.
   - The pipeline never archives. Living specs update when you archive the change, after it merges.
-  - `start` checks the slug against OpenSpec's naming rules. It refuses a slug that already names a spec or change on the base branch, and it needs `openspec` on the PATH.
+  - `start` checks the slug against OpenSpec's naming rules. It refuses a slug that already names a living spec on the base branch, and it needs `openspec` on the PATH.
+  - A change already on the base branch, such as a proposal merged ahead of its code, is the spec stage's starting draft. `start` says so.
 
 ## Usage
 
