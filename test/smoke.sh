@@ -4,6 +4,7 @@
 # FAKE_MODE=openspec|openspec-bad|openspec-livespec runs a profile on the openspec preset, with the real openspec CLI.
 # FAKE_MODE=keepwork|keepwork-forward|keepwork-current exercises resume --goto <stage> --keep-work.
 # FAKE_MODE=restore checks that stages re-entered after review's revert get their last drafts back.
+# FAKE_MODE=authorrevert has implement's author revert to tests before implement ever advanced; its draft must come back.
 # FAKE_MODE=ship pushes to a remote that's missing at first, through a fake gh, for subjects, empty commits and PR args.
 # FAKE_MODE=cap hits maxTransitions, then resumes to DONE.
 # FAKE_MODE=route has review's reviewers disagree, and tests pass the defect on to implement unchanged.
@@ -24,7 +25,9 @@ if [ "${FAKE_MODE:-}" = ship ]; then
 fi
 # Spelled out in full: gates merge key by key over defaults.json's, which also pause before ship and before a revert to spec.
 BEFORE='[]'; if [ "${FAKE_MODE:-}" = keepwork ]; then BEFORE='["ship"]'; fi
-GATES="\"approveAfter\": [\"spec\"], \"approveBefore\": $BEFORE, \"approveRevertTo\": []"
+# authorrevert pauses at each revert to tests, to look at the saved draft between them.
+REVERTTO='[]'; if [ "${FAKE_MODE:-}" = authorrevert ]; then REVERTTO='["tests"]'; fi
+GATES="\"approveAfter\": [\"spec\"], \"approveBefore\": $BEFORE, \"approveRevertTo\": $REVERTTO"
 LIMITS='"stallSec": 1'
 TESTCMD='sh tests/add.test.sh'
 # Only once the suite would pass, so the tests stage's red gate never trips the marker.
@@ -161,6 +164,15 @@ case "${FAKE_MODE:-}" in
   restore)
     expect 'implement escalated on its restored draft' paused_at implement
     pipeline resume $ID --keep-work ;;
+  authorrevert)
+    expect "implement's revert to tests waits at its gate" paused_at implement
+    expect 'the reset took the draft out of the worktree' test ! -e $WT/src/add.sh
+    expect 'but it was saved first' grep -qF -- "$DRAFT" <(git -C $WT show "refs/superpipe/$ID/drafts/implement:src/add.sh")
+    expect "without its edit outside implement's paths" git -C $WT diff --quiet HEAD "refs/superpipe/$ID/drafts/implement" -- tests
+    pipeline resume $ID --approve
+    expect "review's revert to tests waits at its gate" paused_at review
+    expect "implement's advance dropped its saved draft" test -z "$(git -C $WT for-each-ref "refs/superpipe/$ID/drafts")"
+    pipeline resume $ID --approve ;;
   ship)
     expect 'the failed push paused the run at ship' paused_at ship
     expect 'before ship was checkpointed' test -z "$(checkpoints ship)"
@@ -249,6 +261,12 @@ case "${FAKE_MODE:-}" in
     expect 'the deletion shipped' test ! -e $WT/src/old.sh
     expect "the tests commit keeps the stage's first subject, from visit 1, though it last ran in visit 3" grep -q '^test: tests-author-0 visit 1$' <<< "$SUBJECTS"
     expect 'a single revert target adds no disagreement line' lacks visit_has 'tests-author-0 #3' 'named different stages' ;;
+  authorrevert)
+    expect 'implement found its saved draft when the run came back' grep -qF -- "$DRAFT" $FAKE_ROOT/found-implement-author-0-3.add.sh
+    expect 'its context says the draft is restored' visit_has 'implement-author-0 #3' '## Your last draft is restored'
+    expect 'naming the saved draft' visit_has 'implement-author-0 #3' "refs/superpipe/$ID/drafts/implement"
+    expect "which had no subject, so the commit took its author's" grep -q '^feat: implement-author-0 visit 3$' <<< "$SUBJECTS"
+    expect "after implement advanced, the next return restored its checkpoint instead" visit_has 'implement-author-0 #4' "$(checkpoints implement | head -1)" ;;
   route)
     expect 'tests were told the reviewers disagreed' section_has 'tests-author-0 #3' 'Why this stage is running again' 'These reviewers named different stages (tests, implement)'
     expect 'and advanced with their tests unchanged' git -C $WT diff --quiet "$(checkpoints tests | head -1)" "$(checkpoints tests | tail -1)" -- tests

@@ -147,7 +147,7 @@ export interface RunState {
   retryBase?: string;
   /** The current stage was entered after a revert, or on the way back through; `runStage` restores its last draft once. */
   restorePending?: boolean;
-  /** The draft `restoreDraft` last committed. Agents are told about it only while `retryBase` is still `commit`. */
+  /** The draft `restoreDraft` last committed, and the ref it came from: a checkpoint or a saved draft. Agents are told about it only while `retryBase` is still `commit`. */
   restored?: { checkpoint: string; commit: string; skipped: string[] };
   /** Why the run went back. Shown at every stage from `target` on, until `from` advances again. */
   revisit?: { target: Stage; from: Stage; reasons: string[] };

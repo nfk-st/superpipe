@@ -100,6 +100,10 @@ if (c1 === 'agents' && c2 === 'create') {
   else if (M === 'quota' && key === 'implement-author-0') { /* dies on a quota error below */ }
   else if (M?.startsWith('keepwork-') && key === 'tests-author-0' && k === 3) verdict('blocked', { reason: 'No test can reach this defect.' }); // after review's revert
   else if (M === 'restore' && key === 'implement-author-0' && k === 3) verdict('blocked', { reason: 'Needs a human.' }); // on its restored draft
+  else if (M === 'authorrevert' && key === 'implement-author-0' && k === 2) { // a finished draft never committed, and an edit outside implement's paths
+    w('src/add.sh', 'echo $(($1 + $2))\n'); w('tests/add.test.sh', 'exit 0\n');
+    verdict('revert', { target: 'tests', reason: 'tests/add.test.sh has no zero case.' });
+  }
   else if (M === 'route' && key === 'tests-author-0' && k === 3) verdict('advance', { summary: 'Tests cover AC-1; left the zero case to implement, since no test can reach it.' }); // changes nothing
   else S[key]();
   const id = `t${process.pid}`;

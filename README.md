@@ -44,7 +44,7 @@ At `start`, the driver resolves the repo's config, then freezes it and the promp
 3. Watches it: with `paradev agents wait` if the agent reports state through Paradev's hooks, otherwise by its screen. If the agent goes idle without a verdict it gets one nudge. If it's waiting for input, you get a desktop notification and the clock pauses.
 4. Reads the verdict. On `advance` it diffs the worktree against the stage's start commit and **discards the whole attempt if any file outside the stage's writable paths changed**. Then it runs the stage's own checks, then the gates, and commits.
    - **The stage's work since its start becomes one commit,** whatever built it: revise rounds, a restored draft, kept work. So the branch carries one commit per author stage.
-   - **The commit subject** is the one the stage's work already carries: its earliest commit since its start, or for a restored draft, the checkpoint it came from. Failing that, it's the author's conventional `subject`, such as `test: cover the CSV writer`. A missing or malformed one becomes `<type>: <summary>`, cut at a word boundary within 65 characters.
+   - **The commit subject** is the one the stage's work already carries: its earliest commit since its start, or for a restored draft, the checkpoint or saved draft it came from. Failing that, it's the author's conventional `subject`, such as `test: cover the CSV writer`. A missing or malformed one becomes `<type>: <summary>`, cut at a word boundary within 65 characters.
    - **A stage that changed nothing** makes no commit.
    - **A failing test command is re-run once** before the driver acts on it, so one flaky test doesn't cost the stage. A command the driver killed for hanging isn't re-run, and nor are the other checks.
 5. Launches the stage's **reviewers** in parallel against that commit. Any revert sends the work back. If several revert, the earliest target wins. When they named different stages, the reason says so and tells each stage to do only its own part. Edits made by reviewers are thrown away, commits included. Whatever the reviewers decide, a reset within the stage returns to the author's commit, not past it.
@@ -65,6 +65,7 @@ Any author stage can also have its own `checks`, which run before its gate. The 
 A revert to stage X does `git reset --hard` to the commit where X started, drops everything downstream, and re-runs X with the reason as feedback.
 
 - **Drafts come back.** X, and every later stage the run passes through again, starts from its own last draft. The driver restores the files that stage owns from its last checkpoint, on top of the earlier stages' new work, and tells the author to adapt the draft rather than start over.
+- **The reverting stage's draft is saved first,** even if that stage never advanced. Before the reset, the driver saves its work, uncommitted files included, as `refs/superpipe/<run>/drafts/<stage>`. It keeps only the paths that stage may write. When the run comes back, that draft is restored instead of the stage's last checkpoint. The stage's next advance drops it.
 - **The reason travels.** Every stage from X on is told why the run came back, until the stage that sent it back advances again.
 - **A retry** resets within one stage: to the stage's start, or to its latest committed draft.
 
@@ -267,7 +268,7 @@ Nothing in a repo depends on superpipe, so stopping is local to your machine:
 - **Remove your folder:** `rm -rf ~/.superpipe`. It holds your config, your profiles, failed profile checks' logs, and every run's state and logs.
   - A profile check killed mid-run leaves its worktree registered in the repo. `git worktree prune` clears that once the folder is gone.
 - **Workspaces and branches:** a run's Paradev workspace and branch are ordinary ones. Archive them as you would any other.
-- **Checkpoints:** each run's checkpoints are refs under `refs/superpipe/`, which `git tag`, `git branch` and `git push --tags` never show. To remove them from a clone: `git for-each-ref --format='delete %(refname)' refs/superpipe | git update-ref --stdin`.
+- **Checkpoints:** each run's checkpoints and saved drafts are refs under `refs/superpipe/`, which `git tag`, `git branch` and `git push --tags` never show. To remove them from a clone: `git for-each-ref --format='delete %(refname)' refs/superpipe | git update-ref --stdin`.
 - **Deny rules:** these sit in a worktree's `.claude/settings.local.json` only while a pipeline agent is running, so a paused or abandoned run leaves none behind.
 
 ## Tests
@@ -281,6 +282,7 @@ SMOKE_SETUP_FAIL=1 bash test/smoke.sh    # the profile's setup fails once
 FAKE_MODE=openspec bash test/smoke.sh    # the openspec preset, with the real openspec CLI; also openspec-bad, openspec-livespec
 FAKE_MODE=keepwork bash test/smoke.sh    # resume --goto --keep-work from the ship gate; also keepwork-forward, keepwork-current
 FAKE_MODE=restore bash test/smoke.sh     # drafts restored after review's revert, including a deleted file
+FAKE_MODE=authorrevert bash test/smoke.sh # implement reverts before it ever advanced, and its saved draft comes back
 FAKE_MODE=ship bash test/smoke.sh        # commit subjects, no empty ship commit, a failed push, and gh's arguments
 FAKE_MODE=cap bash test/smoke.sh         # maxTransitions pauses the run, and a resume carries on to DONE
 FAKE_MODE=route bash test/smoke.sh       # reviewers disagree on the target; tests pass the defect on to implement
@@ -289,7 +291,7 @@ FAKE_MODE=reviewfail bash test/smoke.sh  # a reviewer blocks after the author's 
 FAKE_MODE=noignore bash test/smoke.sh    # .claude/settings.local.json isn't ignored, so the driver leaves it alone
 ```
 
-Other `FAKE_MODE`s cover failure paths: `noverdict`, `greentests`, `badrevert`, `quota`, `specrevise` and `specrevise-forever`. `noverdict` checks that billing, 401 and rate-limit words on an agent's screen aren't taken for an account problem, and `quota` that Z.ai's quota error is. `FAKE_NO_WAIT=` (empty) exercises the `agents wait` path; add `FAKE_HOOKLESS=1 PIPELINE_STATE_GRACE_MS=500` for an agent with no state hooks. `test/matrix.sh` holds the full list of 23 configurations.
+Other `FAKE_MODE`s cover failure paths: `noverdict`, `greentests`, `badrevert`, `quota`, `specrevise` and `specrevise-forever`. `noverdict` checks that billing, 401 and rate-limit words on an agent's screen aren't taken for an account problem, and `quota` that Z.ai's quota error is. `FAKE_NO_WAIT=` (empty) exercises the `agents wait` path; add `FAKE_HOOKLESS=1 PIPELINE_STATE_GRACE_MS=500` for an agent with no state hooks. `test/matrix.sh` holds the full list of 24 configurations.
 
 The smoke runs superpipe through a symlink to `bin/superpipe`, as `npm link` installs it.
 

@@ -8,7 +8,7 @@ CONFIGS=(
   'no-wait FAKE_NO_WAIT='
   'hookless FAKE_NO_WAIT= FAKE_HOOKLESS=1 PIPELINE_STATE_GRACE_MS=500'
 )
-for m in openspec openspec-bad openspec-livespec keepwork keepwork-forward keepwork-current restore ship cap route flaky \
+for m in openspec openspec-bad openspec-livespec keepwork keepwork-forward keepwork-current restore authorrevert ship cap route flaky \
   reviewfail noignore noverdict greentests badrevert quota specrevise specrevise-forever; do CONFIGS+=("$m FAKE_MODE=$m"); done
 
 failed=0

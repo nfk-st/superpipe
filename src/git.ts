@@ -50,6 +50,28 @@ export async function latestCheckpoint(dir: string, runId: string, stage: string
   return ref ? { ref, commit: (await git(dir, ['rev-parse', `${ref}^{commit}`])).trim() } : undefined;
 }
 
+/** Not `<nn>-<stage>`, so `latestCheckpoint` never takes a saved draft for an advance. */
+const draftRef = (runId: string, stage: string) => `refs/superpipe/${runId}/drafts/${stage}`;
+
+/** Saves HEAD plus the worktree's changes, except `skip`, as the stage's draft. Leaves HEAD and the worktree as they were. */
+export async function saveDraft(dir: string, runId: string, stage: string, skip: string[], message: string) {
+  await git(dir, ['add', '-A']);
+  if (skip.length) await git(dir, ['--literal-pathspecs', 'reset', '-q', 'HEAD', '--', ...skip]);
+  const tree = (await git(dir, ['write-tree'])).trim();
+  const commit = (await git(dir, ['commit-tree', tree, '-p', 'HEAD', '-m', message])).trim();
+  await git(dir, ['update-ref', draftRef(runId, stage), commit]);
+  await git(dir, ['reset', '-q']);
+  return draftRef(runId, stage);
+}
+
+export async function savedDraft(dir: string, runId: string, stage: string): Promise<{ ref: string; commit: string } | undefined> {
+  const ref = draftRef(runId, stage);
+  const commit = (await git(dir, ['for-each-ref', '--format=%(objectname)', ref])).trim();
+  return commit ? { ref, commit } : undefined;
+}
+
+export const dropDraft = (dir: string, runId: string, stage: string) => git(dir, ['update-ref', '-d', draftRef(runId, stage)]);
+
 export const treeOf = async (dir: string, rev: string) => (await git(dir, ['rev-parse', `${rev}^{tree}`])).trim();
 
 /** Paths that differ between two commits, with their A/M/D status. `-z`: without it git quotes non-ASCII paths. */

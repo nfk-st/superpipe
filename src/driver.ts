@@ -558,11 +558,26 @@ export async function jumpToDraft(st: RunState, cfg: Config, target: Stage, reas
 }
 
 /**
+ * Before a revert's reset, keeps the stage's draft, uncommitted files included, for `restoreDraft`:
+ * a stage that never advanced has no checkpoint to bring it back from. Only paths the stage may write.
+ */
+async function saveDraft(st: RunState, cfg: Config, stage: Stage) {
+  const policy = writePolicy(cfg, st.slug, stage);
+  const skip = (await g.changedFiles(st.dir, 'HEAD')).filter((f) => !policy.allows(f));
+  const subject = (await keptSubject(st, st.stageStart[stage]!)) ?? NO_SUBJECT;
+  const ref = await g.saveDraft(st.dir, st.id, stage, skip, subject);
+  await log(st, `saved the ${stage} draft as ${ref}`);
+}
+
+/**
  * Puts a re-entered stage's last draft back on top of the earlier stages' new work, so its author adapts
- * it instead of starting over. Only paths this stage may write and no earlier stage may.
+ * it instead of starting over. Only paths this stage may write and no earlier stage may. The draft a
+ * revert saved is newer than any checkpoint, since the stage's next advance drops it.
  */
 async function restoreDraft(st: RunState, cfg: Config, stage: Stage) {
-  const last = cfg.stages[stage].author ? await g.latestCheckpoint(st.dir, st.id, stage) : undefined;
+  const last = cfg.stages[stage].author
+    ? (await g.savedDraft(st.dir, st.id, stage)) ?? (await g.latestCheckpoint(st.dir, st.id, stage))
+    : undefined;
   if (last) {
     const own = writePolicy(cfg, st.slug, stage);
     const earlier = STAGES.slice(0, stageIndex(stage)).map((s) => writePolicy(cfg, st.slug, s));
@@ -584,15 +599,19 @@ async function restoreDraft(st: RunState, cfg: Config, stage: Stage) {
   delete st.restorePending;
 }
 
+/** A saved draft's message when its stage's work has no subject yet, which `keptSubject` skips. */
+const NO_SUBJECT = 'superpipe: a draft with no subject yet';
+
 /**
  * The subject a stage's work already carries: that of its earliest commit since `start`, or for a
- * restored draft, of the checkpoint it came from. A restarted stage has none, so takes its author's.
+ * restored draft, of the checkpoint or saved draft it came from. A restarted stage has none, so takes its author's.
  */
 async function keptSubject(st: RunState, start: string): Promise<string | undefined> {
   const first = (await g.git(st.dir, ['log', '--reverse', '--format=%H', `${start}..HEAD`])).split('\n')[0];
   if (!first) return undefined;
   const from = first === st.restored?.commit ? `${st.restored.checkpoint}^{commit}` : first;
-  return (await g.git(st.dir, ['log', '-1', '--format=%s', from])).trim() || undefined;
+  const subject = (await g.git(st.dir, ['log', '-1', '--format=%s', from])).trim();
+  return subject && subject !== NO_SUBJECT ? subject : undefined;
 }
 
 async function onAdvance(st: RunState, cfg: Config, stage: Stage, summary: string) {
@@ -611,6 +630,7 @@ async function onAdvance(st: RunState, cfg: Config, stage: Stage, summary: strin
 
   st.seq++;
   await g.checkpoint(st.dir, st.id, `${String(st.seq).padStart(2, '0')}-${stage}`);
+  await g.dropDraft(st.dir, st.id, stage);
   record(st, stage, 'advance', summary || '(no summary)');
   st.feedback = [];
   delete st.retryBase;
@@ -747,6 +767,7 @@ export async function drive(st: RunState, cfg: Config) {
         }
         break;
       case 'revert':
+        if (cfg.stages[stage].author) await saveDraft(st, cfg, stage);
         await g.resetHard(st.dir, resetBase());
         if (cfg.gates?.approveRevertTo?.includes(outcome.target)) {
           await pause(st, {
